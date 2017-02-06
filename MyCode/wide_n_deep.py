@@ -110,31 +110,65 @@ def build_estimator(model_dir):
   return m
 
 
+# def input_fn(df):
+#   """Input builder function."""
+#   # Creates a dictionary mapping from each continuous feature column name (k) to
+#   # the values of that column stored in a constant Tensor.
+#   continuous_cols = {k: tf.constant(df[k].values) for k in CONTINUOUS_COLUMNS}
+
+#   # Creates a dictionary mapping from each categorical feature column name (k)
+#   # to the values of that column stored in a tf.SparseTensor.
+#   categorical_cols = {k: tf.SparseTensor(
+#       indices=[[i, 0] for i in range(df[k].size)],
+#       values=df[k].values, shape=[df[k].size, 1])
+#       for k in CATEGORICAL_COLUMNS}
+#   init = tf.initialize_all_variables()
+#   with tf.Session() as sess:
+#     for k in categorical_cols:
+#       print(sess.run(categorical_cols[k].shape))
+
+#   # Merges the two dictionaries into one.
+#   feature_cols = dict(continuous_cols)
+#   feature_cols.update(categorical_cols)
+
+#   # Converts the label column into a constant Tensor.
+#   label = tf.constant(df[LABEL_COLUMN].values)
+
+#   # Returns the feature columns and the label.
+#   return feature_cols, label
+
 def input_fn(df):
-  """Input builder function."""
+  """Input builder function"""
   # Creates a dictionary mapping from each continuous feature column name (k) to
-  # the values of that column stored in a constant Tensor.
+  # the values of that column stored in a tf.SparseTensor
   continuous_cols = {k: tf.constant(df[k].values) for k in CONTINUOUS_COLUMNS}
+  for k in CONTINUOUS_COLUMNS:
+    print(df[k].unique())
 
   # Creates a dictionary mapping from each categorical feature column name (k)
-  # to the values of that column stored in a tf.SparseTensor.
-  categorical_cols = {k: tf.SparseTensor(
-      indices=[[i, 0] for i in range(df[k].size)],
-      values=df[k].values, shape=[df[k].size, 1])
-      for k in CATEGORICAL_COLUMNS}
-  init = tf.initialize_all_variables()
-  with tf.Session() as sess:
-    for k in categorical_cols:
-      print(sess.run(categorical_cols[k].shape))
+  # to the values of that column stored in a tf.SparseTensor
+  categorical_cols = {}
+  for k in CATEGORICAL_COLUMNS:
+    print(df[k].unique(), k)
+    categorical_cols[k] = tf.SparseTensor(indices=[[i, 0] for i in range(df[k].size)], values=(df[k].values), shape=[df[k].size, 1])
+    print("----------------")
+  print("out")
+  # categorical_cols = {
+  #   k: tf.SparseTensor(indices=[[i, 0] for i in range(df[k].size)], values=str(df[k].values), shape=[df[k].size, 1])
+  #   for k in CATEGORICAL_COLUMNS
+  # }
 
-  # Merges the two dictionaries into one.
+  # Merges the two dictionaries into one
   feature_cols = dict(continuous_cols)
   feature_cols.update(categorical_cols)
 
-  # Converts the label column into a constant Tensor.
+  # Converts the label column into a constant Tensor
   label = tf.constant(df[LABEL_COLUMN].values)
+  print(df[LABEL_COLUMN].values)
+  print("-----------------------------")
+  print(df[LABEL_COLUMN].dtypes)
 
-  # Returns the feature columns and the label.
+  # Returns the feature columns and the label
   return feature_cols, label
 
 
