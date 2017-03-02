@@ -55,14 +55,11 @@ def MAE(y_pred, y_test):
 def load_users():
 	u_cols = ['user_id', 'age', 'sex', 'occupation', 'zip_code']
 	users = pd.read_csv('../ml-100k/u.user', sep='|', names=u_cols, encoding='latin-1', engine="python")
-	print("USERS LOADED")
-	# print(users.dtypes)
 	return users
 
 def load_ratings(filename):
 	r_cols = ['user_id', 'movie_id', 'rating', 'timestamp']
 	ratings = pd.read_csv('../ml-100k/'+filename, sep='\t', names=r_cols, encoding='latin-1', engine="python")
-	print("RATINGS LOADED")
 	return ratings
 
 def load_movies():
@@ -78,8 +75,6 @@ def load_movies():
 			continue
 		else:
 			movies = movies.replace({k:di})
-	print("MOVIES LOADED")
-	# print(movies.dtypes)
 	return movies
 
 def merge_data():
@@ -93,7 +88,6 @@ def merge_data():
 	test_movie_ratings = pd.merge(movies, test_ratings)
 	test_data = pd.merge(test_movie_ratings, users)
 	
-	print("DATA LOADED")
 	return train_data, test_data
 
 
@@ -159,17 +153,19 @@ def build_estimator(model_dir):
 
 	if FLAGS.model_type == "wide":
 		m = tflearn.LinearRegressor(model_dir=model_dir, feature_columns=wide_columns)
+		# m = tflearn.LinearClassifier(model_dir=model_dir, feature_columns=wide_columns)
 	elif FLAGS.model_type == "deep":
 		m = tflearn.DNNRegressor(model_dir=model_dir, feature_columns=deep_columns, hidden_units=[100, 50])
+		# m = tflearn.DNNClassifier(model_dir=model_dir, feature_columns=deep_columns, hidden_units=[100, 50])
 	else:
 		m = tflearn.DNNLinearCombinedRegressor(model_dir=model_dir, linear_feature_columns=wide_columns, 
 			dnn_feature_columns=deep_columns, dnn_hidden_units=[100, 50])
+		# m = tflearn.DNNLinearCombinedClassifier(model_dir=model_dir, linear_feature_columns=wide_columns, 
+		# 	dnn_feature_columns=deep_columns, dnn_hidden_units=[100, 50])
 
 	return m
 
 def input_fn(df):
-	# for k in COLUMNS:
-	# 	print(k, df[k].unique())
 	"""Input builder function"""
 	# Creates a dictionary mapping from each continuous feature column name (k) to
 	# the values of that column stored in a tf.SparseTensor
@@ -177,13 +173,8 @@ def input_fn(df):
 
 	# Creates a dictionary mapping from each categorical feature column name (k)
 	# to the values of that column stored in a tf.SparseTensor
-	# categorical_cols = {}
-	# for k in CATEGORICAL_COLUMNS:
-	# 	categorical_cols[k] = tf.SparseTensor(indices=[[i, 0] for i in range(df[k].size)], values=(df[k].values), shape=[df[k].size, 1])
-	# 	print("----------------")
-	# print("out")
 	categorical_cols = {
-		k: tf.SparseTensor(indices=[[i, 0] for i in range(df[k].size)], values=(df[k].values), shape=[df[k].size, 1])
+		k: tf.SparseTensor(indices=[[i, 0] for i in range(df[k].size)], values=df[k].values, shape=[df[k].size, 1])
 		for k in CATEGORICAL_COLUMNS
 	}
 
@@ -192,7 +183,6 @@ def input_fn(df):
 	feature_cols.update(categorical_cols)
 	# Converts the label column into a constant Tensor
 	label = tf.constant(df[LABEL_COLUMN].values)
-	# pprint.pprint(feature_cols)
 
 	# Returns the feature columns and the label
 	return feature_cols, label
@@ -213,10 +203,9 @@ def train_and_eval():
 
 	m = build_estimator(model_dir)
 	m.fit(input_fn=lambda: input_fn(train_data), steps=FLAGS.train_steps)
-	results = m.evaluate(input_fn=lambda: input_fn(test_data))
-	# print(results)
+	results = m.evaluate(input_fn=lambda: input_fn(test_data), steps=1)
 	for key in sorted(results):
-		print("%s                                 : %s" % (key, results[key]))
+		print("%s : %s" % (key, results[key]))
 
 def main(_):
 	train_and_eval()
