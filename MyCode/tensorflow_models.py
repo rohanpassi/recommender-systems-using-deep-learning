@@ -6,7 +6,8 @@ import time
 import pprint
 import argparse
 import tempfile
-from math import sqrt
+import operator
+from math import sqrt,ceil
 from dateutil import parser
 from datetime import datetime
 
@@ -25,7 +26,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("model_dir", "", "Base directory for output models.")
 flags.DEFINE_string("model_type", "wide_n_deep",
                     "Valid model types: {'wide', 'deep', 'wide_n_deep'}.")
-flags.DEFINE_integer("train_steps", 500, "Number of training steps.")
+flags.DEFINE_integer("train_steps", 5, "Number of training steps.")
 flags.DEFINE_string(
     "train_data",
     "",
@@ -90,6 +91,53 @@ def dateDiff(movieDate, ratingDate):
 	diff = ratingDate - movieDate
 	return int(abs(diff.total_seconds()))
 
+def checkAccuracy(pred, test_data):
+	pred = pd.DataFrame(pred,columns = {'predRating'})
+	test_data = pd.concat([test_data, pred], axis=1)
+	
+	grouped_df = test_data.groupby('user_id')
+
+	totMovies = 0
+	totUsers = 0
+	accuracy = 0
+	for key, item in grouped_df:
+		actual = {}
+		predicted = {}
+		for index,row in item.iterrows():
+			actual[row['movie_id']] = row['rating']
+			predicted[row['movie_id']] = row['predRating']
+		
+		actual = sorted(actual.items(),key=operator.itemgetter(1),reverse=True)
+		predicted = sorted(predicted.items(),key=operator.itemgetter(1),reverse=True)
+		
+		totLen = len(actual)
+		item = int(ceil(float(totLen)/2))
+		while (item < totLen) and (actual[item][1] == actual[item-1][1]):
+			item += 1
+		
+		actualMovie = []
+		for key,val in actual:
+			actualMovie.append(key)
+
+		predictedMovie = []
+		for key,val in predicted:
+			predictedMovie.append(key)
+
+		actualMovie = actualMovie[:item]
+		predictedMovie = predictedMovie[:item]
+
+		cnt = 0
+		for i in range(0,item):
+			if predictedMovie[i] in actualMovie:
+				cnt += 1
+
+		userAccuracy = float(cnt)/item
+		# print("user: ",userAccuracy)
+		accuracy += userAccuracy
+		totUsers += 1
+
+	print("Accuracy:",accuracy/totUsers)
+
 def load_users():
 	u_cols = ['user_id', 'age', 'sex', 'occupation', 'zip_code']
 	users = pd.read_csv('../ml-100k/u.user', sep='|', names=u_cols, encoding='latin-1', engine="python")
@@ -121,8 +169,8 @@ def load_movies():
 def load_time(filename):
 	col_name = ['time_diff']
 	time = pd.read_csv(filename, names=col_name, encoding='latin-1', engine='python')
-	train_data['time_diff'] = (train_data["rating"].astype(int))
-	train_data['time_diff'] = min_max_normalization(train_data['time_diff'], 0, 1)
+	time['time_diff'] = (time["time_diff"].astype(int))
+	time['time_diff'] = min_max_normalization(time['time_diff'], 0, 1)
 	return time
 
 def merge_data():
@@ -269,7 +317,7 @@ def build_estimator(model_dir):
 		m = tflearn.LinearRegressor(model_dir=model_dir, feature_columns=wide_columns)
 		# m = tflearn.LinearClassifier(model_dir=model_dir, feature_columns=wide_columns)
 	elif FLAGS.model_type == "deep":
-		m = tflearn.DNNRegressor(model_dir=model_dir, feature_columns=deep_columns, hidden_units=[100, 50])
+		m = tflearn.DNNRegressor(model_dir=model_dir, feature_columns=deep_columns, hidden_units=[64, 32, 16])
 		# m = tflearn.DNNClassifier(model_dir=model_dir, feature_columns=deep_columns, hidden_units=[100, 50])
 	elif FLAGS.model_type == "logistic":
 		m = tflearn.LogisticRegressor()
@@ -314,24 +362,28 @@ def train_and_eval():
 	train_data[LABEL_COLUMN] = (train_data["rating"].astype(float))
 	test_data[LABEL_COLUMN] = (test_data["rating"].astype(float))
 
-	model_dir = "/home/rohan/Documents/MTPS/Rohan/MyCode/test_model"
+	# model_dir = "/home/rohan/Documents/MTPS/Rohan/MyCode/wide_n_deep_model"
+	# model_dir = "/home/rohan/Documents/MTPS/Rohan/MyCode/deep_model"
+	model_dir = "/home/rohan/Documents/MTPS/Rohan/MyCode/wide_model"
 	print("model directory = %s" % model_dir)
 
 	test_rmse = np.zeros(FLAGS.train_steps)
 
 	m = build_estimator(model_dir)
-	for i in range(FLAGS.train_steps):
+	for i in range(1):
 		m.fit(input_fn=lambda: input_fn(train_data), steps=1)
 		# results = m.evaluate(input_fn=lambda: input_fn(test_data), steps=1)
 		# for key in sorted(results):
 		# 	print("%s : %s" % (key, results[key]))
 		results = m.predict(input_fn=lambda: input_fn(test_data))
 		results = min_max_normalization(results, 0, 1)
+		checkAccuracy(results, test_data)
 		test_rmse[i] = RMSE(results, test_data[LABEL_COLUMN])
+		print(test_rmse[i])
 
 	outFile = open("rmse_with_time.csv","wb")
 	for i in range(0, len(test_rmse)):
-		outFile.write(str(test_rmse[i]))
+		outFile.write(str(test_rmse[i]) + '\n')
 	outFile.close()
 
 
